@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>喵喵智能助手</title>
+    <title>SuperMew 教育 RAG 助手</title>
     <link rel="stylesheet" href="style.css">
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&family=Zcool+KuaiLe&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Markdown Parser -->
@@ -23,8 +23,8 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="logo-icon">🐱</div>
-                <h2>喵喵助手</h2>
+                <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+                <h2>SuperMew</h2>
             </div>
             <nav class="sidebar-nav">
                 <button @click="handleNewChat" :class="['nav-btn', {active: activeNav === 'newChat'}]">
@@ -459,7 +459,7 @@
                 <header class="chat-header">
                     <div class="header-info">
                         <div class="status-dot"></div>
-                        <span>喵喵在线中...</span>
+                        <span>教育 RAG 助手在线</span>
                     </div>
                     <div class="header-actions">
                         <button class="icon-btn" title="更多"><i class="fas fa-ellipsis-h"></i></button>
@@ -468,9 +468,9 @@
 
                 <div class="chat-container" ref="chatContainer">
                 <div v-if="messages.length === 0" class="welcome-screen">
-                    <div class="big-avatar">🐱</div>
-                    <h3>你好呀！我是喵喵</h3>
-                    <p>我可以帮你写代码、回答问题，或者只是陪你聊天~ 喵！</p>
+                    <div class="big-avatar"><i class="fas fa-chalkboard-user"></i></div>
+                    <h3>你好，我是 SuperMew</h3>
+                    <p>我可以基于教材知识库辅助教材问答、智能出题、教案生成、批改参考和知识路径推理。</p>
                 </div>
                 
                 <!-- Messages -->
@@ -639,7 +639,7 @@
                         @compositionstart="handleCompositionStart"
                         @compositionend="handleCompositionEnd"
                         @input="autoResize"
-                        placeholder="和喵喵说点什么吧... (Shift+Enter 换行)" 
+                        placeholder="输入教学问题、出题要求或备课需求... (Shift+Enter 换行)" 
                         rows="1"
                         ref="textarea"
                     ></textarea>

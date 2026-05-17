@@ -345,7 +345,7 @@ createApp({
                     }
                 } else {
                     this.messages[botMsgIdx].isThinking = false;
-                    this.messages[botMsgIdx].text = `请求处理失败：${error.message}`;
+                    this.messages[botMsgIdx].text = `出了点问题：${error.message}`;
                 }
             } finally {
                 this.isLoading = false;

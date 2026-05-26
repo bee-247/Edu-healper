@@ -18,7 +18,6 @@ TeacherAgentRoute = Literal[
     "question_generator",
     "lesson_planner",
     "grading_assistant",
-    "graph_tutor",
 ]
 
 _intent_router_model = None
@@ -57,10 +56,10 @@ def route_teacher_agent(user_text: str) -> str:
 
 可选 Agent：
 - general：普通对话、教材问答、混合请求、无法归类的问题。
+  也处理前置知识、知识图谱、概念关系、相关知识、易混淆点、教学路径等图谱辅助类请求。
 - question_generator：生成题目、试卷、练习、作业题、答案、解析、rubric。
 - lesson_planner：备课、教案、教学设计、教学流程、板书、课堂练习、课后作业设计。
 - grading_assistant：批改、评分、学生答案分析、错因分析、rubric 反馈、给分建议。
-- graph_tutor：前置知识、知识图谱、概念关系、相关知识、易混淆点、教学路径。
 
 只选择最合适的一个 Agent。不要根据关键词机械匹配，要理解教师真实意图。
 

@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from pydantic import BaseModel, Field
+from token_usage_tracker import record_active_session_token_usage_from_message
 
 from rag_utils import retrieve_documents, step_back_expand, generate_hypothetical_document
 from tools import emit_rag_step
@@ -172,6 +173,7 @@ def grade_documents_node(state: RAGState) -> RAGState:
     response = grader.with_structured_output(GradeDocuments).invoke(
         [{"role": "user", "content": prompt}]
     )
+    record_active_session_token_usage_from_message(response)
     score = (response.binary_score or "").strip().lower()
     route = "generate_answer" if score == "yes" else "rewrite_question"
     if route == "generate_answer":
@@ -205,6 +207,7 @@ def rewrite_question_node(state: RAGState) -> RAGState:
             decision = router.with_structured_output(RewriteStrategy).invoke(
                 [{"role": "user", "content": prompt}]
             )
+            record_active_session_token_usage_from_message(decision)
             strategy = decision.strategy
         except Exception:
             strategy = "step_back"

@@ -87,11 +87,10 @@ createApp({
             authMode: 'login',
             authForm: {
                 username: '',
-                password: '',
-                role: 'user',
-                admin_code: ''
+                password: ''
             },
-            authLoading: false
+            authLoading: false,
+            sessionTokenUsage: null
         };
     },
     computed: {
@@ -183,10 +182,6 @@ createApp({
                     username,
                     password
                 };
-                if (this.authMode === 'register') {
-                    payload.role = this.authForm.role;
-                    payload.admin_code = this.authForm.admin_code || null;
-                }
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -203,8 +198,8 @@ createApp({
                 this.currentUser = { username: data.username, role: data.role };
                 localStorage.setItem('accessToken', this.token);
                 this.authForm.password = '';
-                this.authForm.admin_code = '';
                 this.messages = [];
+                this.sessionTokenUsage = null;
                 this.sessionId = 'session_' + Date.now();
                 this.activeNav = 'newChat';
             } catch (error) {
@@ -220,6 +215,7 @@ createApp({
             this.messages = [];
             this.sessions = [];
             this.documents = [];
+            this.sessionTokenUsage = null;
             this.activeNav = 'newChat';
             this.showHistorySidebar = false;
             localStorage.removeItem('accessToken');
@@ -318,6 +314,8 @@ createApp({
                                     this.messages[botMsgIdx].text += data.content;
                                 } else if (data.type === 'trace') {
                                     this.messages[botMsgIdx].ragTrace = data.rag_trace;
+                                } else if (data.type === 'token_usage') {
+                                    this.sessionTokenUsage = data.token_usage;
                                 } else if (data.type === 'rag_step') {
                                     if (!this.messages[botMsgIdx].ragSteps) {
                                         this.messages[botMsgIdx].ragSteps = [];
@@ -350,6 +348,7 @@ createApp({
             } finally {
                 this.isLoading = false;
                 this.abortController = null;
+                await this.loadSessionTokenUsage();
                 this.$nextTick(() => this.scrollToBottom());
             }
         },
@@ -375,6 +374,7 @@ createApp({
         handleNewChat() {
             if (!this.isAuthenticated) return;
             this.messages = [];
+            this.sessionTokenUsage = null;
             this.sessionId = 'session_' + Date.now();
             this.activeNav = 'newChat';
             this.showHistorySidebar = false;
@@ -383,6 +383,18 @@ createApp({
         handleClearChat() {
             if (confirm('确定要清空当前对话吗？')) {
                 this.messages = [];
+                this.sessionTokenUsage = null;
+            }
+        },
+
+        async loadSessionTokenUsage() {
+            if (!this.isAuthenticated || !this.sessionId) return;
+            try {
+                const response = await this.authFetch(`/sessions/${encodeURIComponent(this.sessionId)}/token-usage`);
+                if (!response.ok) return;
+                this.sessionTokenUsage = await response.json();
+            } catch (_) {
+                this.sessionTokenUsage = null;
             }
         },
 
@@ -418,6 +430,7 @@ createApp({
                     isUser: msg.type === 'human',
                     ragTrace: msg.rag_trace || null
                 }));
+                await this.loadSessionTokenUsage();
 
                 this.$nextTick(() => {
                     this.scrollToBottom();
@@ -425,6 +438,7 @@ createApp({
             } catch (error) {
                 alert('加载会话失败：' + error.message);
                 this.messages = [];
+                this.sessionTokenUsage = null;
             }
         },
 
@@ -447,6 +461,7 @@ createApp({
 
                 if (this.sessionId === sessionId) {
                     this.messages = [];
+                    this.sessionTokenUsage = null;
                     this.sessionId = 'session_' + Date.now();
                     this.activeNav = 'newChat';
                 }

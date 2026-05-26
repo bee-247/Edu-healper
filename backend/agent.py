@@ -17,6 +17,13 @@ from datetime import datetime
 from cache import cache
 from database import SessionLocal
 from models import User, ChatSession, ChatMessage
+from token_usage_tracker import (
+    get_session_token_usage,
+    record_token_usage_from_message,
+    record_token_usage_from_messages,
+    reset_active_token_usage_session,
+    set_active_token_usage_session,
+)
 
 load_dotenv()
 
@@ -270,14 +277,15 @@ def chat_with_agent(user_text: str, user_id: str = "default_user", session_id: s
     get_last_rag_context(clear=True)
     reset_tool_call_guards()
     
-    if len(messages) > 50:
-        summary = summarize_old_messages(model, messages[:40])
+    if len(messages) > 24:
+        summary = summarize_old_messages(model, messages[:16])
 
         messages = [
             SystemMessage(content=f"之前的对话摘要：\n{summary}")
-        ] + messages[40:]
+        ] + messages[16:]
 
     messages.append(HumanMessage(content=user_text))
+    usage_token = set_active_token_usage_session(user_id, session_id)
     selected_agent, agent_route = _select_agent(user_text)
     context_token = set_teacher_username(user_id)
     try:
@@ -287,6 +295,7 @@ def chat_with_agent(user_text: str, user_id: str = "default_user", session_id: s
         )
     finally:
         reset_teacher_username(context_token)
+        reset_active_token_usage_session(usage_token)
 
     response_content = ""
     if isinstance(result, dict):
@@ -301,6 +310,11 @@ def chat_with_agent(user_text: str, user_id: str = "default_user", session_id: s
         response_content = result.content
     else:
         response_content = str(result)
+
+    if isinstance(result, dict) and isinstance(result.get("messages"), list):
+        record_token_usage_from_messages(user_id, session_id, result["messages"])
+    else:
+        record_token_usage_from_message(user_id, session_id, result)
     
     messages.append(AIMessage(content=response_content))
 
@@ -339,13 +353,14 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
 
     set_rag_step_queue(_RagStepProxy())
 
-    if len(messages) > 50:
-        summary = summarize_old_messages(model, messages[:40])
+    if len(messages) > 24:
+        summary = summarize_old_messages(model, messages[:16])
         messages = [
             SystemMessage(content=f"之前的对话摘要：\n{summary}")
-        ] + messages[40:]
+        ] + messages[16:]
 
     messages.append(HumanMessage(content=user_text))
+    usage_token = set_active_token_usage_session(user_id, session_id)
     selected_agent, agent_route = _select_agent(user_text)
 
     full_response = ""
@@ -361,6 +376,7 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
                 stream_mode="messages",
                 config={"recursion_limit": 8},
             ):
+                record_token_usage_from_message(user_id, session_id, msg)
                 if not isinstance(msg, AIMessageChunk):
                     continue
                 if getattr(msg, "tool_call_chunks", None):
@@ -411,6 +427,7 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
         set_rag_step_queue(None)
         if not agent_task.done():
              agent_task.cancel()
+        reset_active_token_usage_session(usage_token)
 
     # 获取 RAG trace
     rag_context = get_last_rag_context(clear=True)
@@ -419,6 +436,9 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
     # 发送 trace 信息
     if rag_trace:
         yield f"data: {json.dumps({'type': 'trace', 'rag_trace': rag_trace})}\n\n"
+
+    token_usage = get_session_token_usage(user_id, session_id)
+    yield f"data: {json.dumps({'type': 'token_usage', 'token_usage': token_usage})}\n\n"
 
     # 发送结束信号
     yield "data: [DONE]\n\n"

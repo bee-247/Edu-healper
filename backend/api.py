@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from agent import chat_with_agent, chat_with_agent_stream, storage
-from auth import authenticate_user, create_access_token, get_current_user, get_db, get_password_hash, resolve_role
+from auth import authenticate_user, create_access_token, get_current_user, get_db, get_password_hash
 from database import SessionLocal
 from document_loader import DocumentLoader
 from embedding import embedding_service
@@ -58,7 +58,9 @@ from schemas import (
     TeacherArtifactListResponse,
     TeacherArtifactUpdate,
     TeacherTaskResponse,
+    TokenUsageResponse,
 )
+from token_usage_tracker import delete_session_token_usage, get_session_token_usage
 from upload_jobs import DELETE_STEPS, delete_job_manager, upload_job_manager
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -243,7 +245,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     if exists:
         raise HTTPException(status_code=409, detail="用户名已存在")
 
-    role = resolve_role(request.role, request.admin_code)
+    role = "user"
     user = User(username=username, password_hash=get_password_hash(password), role=role)
     db.add(user)
     db.commit()
@@ -302,11 +304,18 @@ async def delete_session(session_id: str, current_user: User = Depends(get_curre
         deleted = storage.delete_session(current_user.username, session_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="会话不存在")
+        delete_session_token_usage(current_user.username, session_id)
         return SessionDeleteResponse(session_id=session_id, message="成功删除会话")
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sessions/{session_id}/token-usage", response_model=TokenUsageResponse)
+async def get_session_token_usage_endpoint(session_id: str, current_user: User = Depends(get_current_user)):
+    usage = get_session_token_usage(current_user.username, session_id)
+    return TokenUsageResponse(session_id=session_id, **usage)
 
 
 def _artifact_info(artifact: TeacherArtifact) -> TeacherArtifactInfo:

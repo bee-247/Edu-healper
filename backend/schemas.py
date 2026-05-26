@@ -5,8 +5,6 @@ from typing import Any, Optional, List
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    role: Optional[str] = "user"
-    admin_code: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
@@ -110,6 +108,14 @@ class SessionListResponse(BaseModel):
 class SessionDeleteResponse(BaseModel):
     session_id: str
     message: str
+
+
+class TokenUsageResponse(BaseModel):
+    session_id: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    requests: int = 0
 
 
 class DocumentInfo(BaseModel):

@@ -65,11 +65,6 @@
                 <div class="auth-form">
                     <input v-model="authForm.username" type="text" placeholder="用户名" />
                     <input v-model="authForm.password" type="password" placeholder="密码" />
-                    <select v-if="authMode === 'register'" v-model="authForm.role">
-                        <option value="user">普通用户</option>
-                        <option value="admin">管理员</option>
-                    </select>
-                    <input v-if="authMode === 'register' && authForm.role === 'admin'" v-model="authForm.admin_code" type="password" placeholder="管理员邀请码" />
                     <button class="send-btn auth-submit" :disabled="authLoading" @click="handleAuthSubmit">
                         {{ authLoading ? '提交中...' : (authMode === 'login' ? '登录' : '注册') }}
                     </button>
@@ -460,6 +455,10 @@
                     <div class="header-info">
                         <div class="status-dot"></div>
                         <span>智教助手在线中...</span>
+                    </div>
+                    <div v-if="sessionTokenUsage" class="token-usage-badge" title="当前会话测试用 token 统计">
+                        <span>Tokens {{ sessionTokenUsage.total_tokens }}</span>
+                        <small>输入 {{ sessionTokenUsage.prompt_tokens }} / 输出 {{ sessionTokenUsage.completion_tokens }}</small>
                     </div>
                     <div class="header-actions">
                         <button class="icon-btn" title="更多"><i class="fas fa-ellipsis-h"></i></button>

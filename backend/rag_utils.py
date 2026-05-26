@@ -12,6 +12,7 @@ from langchain.chat_models import init_chat_model
 from database import SessionLocal
 from education.tool_context import get_teacher_username
 from models import Resource, User
+from token_usage_tracker import record_active_session_token_usage_from_message
 
 load_dotenv()
 
@@ -191,7 +192,9 @@ def _generate_step_back_question(query: str) -> str:
         f"用户问题：{query}"
     )
     try:
-        return (model.invoke(prompt).content or "").strip()
+        response = model.invoke(prompt)
+        record_active_session_token_usage_from_message(response)
+        return (response.content or "").strip()
     except Exception:
         return ""
 
@@ -206,7 +209,9 @@ def _answer_step_back_question(step_back_question: str) -> str:
         f"退步问题：{step_back_question}"
     )
     try:
-        return (model.invoke(prompt).content or "").strip()
+        response = model.invoke(prompt)
+        record_active_session_token_usage_from_message(response)
+        return (response.content or "").strip()
     except Exception:
         return ""
 
@@ -222,7 +227,9 @@ def generate_hypothetical_document(query: str) -> str:
         f"用户问题：{query}"
     )
     try:
-        return (model.invoke(prompt).content or "").strip()
+        response = model.invoke(prompt)
+        record_active_session_token_usage_from_message(response)
+        return (response.content or "").strip()
     except Exception:
         return ""
 

@@ -292,9 +292,11 @@ def _task_messages(base_messages: list, original_text: str, task: TeacherSubTask
 
 
 def _format_multi_task_response(parts: list[tuple[TeacherSubTask, str]]) -> str:
+    task_plan = [task for task, _ in parts]
+    plan_text = _format_task_plan_markdown(task_plan)
     if len(parts) == 1:
-        return parts[0][1]
-    sections = []
+        return f"{plan_text}\n\n{parts[0][1]}"
+    sections = [plan_text]
     for index, (task, content) in enumerate(parts, start=1):
         sections.append(f"### 任务 {index}：{task.route}\n\n{content}")
     return "\n\n".join(sections)
@@ -302,6 +304,13 @@ def _format_multi_task_response(parts: list[tuple[TeacherSubTask, str]]) -> str:
 
 def _route_summary(tasks: list[TeacherSubTask]) -> str:
     return " -> ".join(task.route for task in tasks)
+
+
+def _format_task_plan_markdown(tasks: list[TeacherSubTask]) -> str:
+    lines = [f"### 任务规划\n\nAgent 路径：{_route_summary(tasks) or 'general'}"]
+    for index, task in enumerate(tasks, start=1):
+        lines.append(f"{index}. {task.route}：{task.instruction}")
+    return "\n".join(lines)
 
 
 def _task_plan_payload(tasks: list[TeacherSubTask]) -> list[dict]:
@@ -431,6 +440,9 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
         try:
             await output_queue.put({"type": "task_plan", "tasks": _task_plan_payload(task_plan)})
             await output_queue.put({"type": "agent_route", "agent_route": _route_summary(task_plan)})
+            plan_text = _format_task_plan_markdown(task_plan) + "\n\n"
+            full_response += plan_text
+            await output_queue.put({"type": "content", "content": plan_text})
             for index, task in enumerate(task_plan, start=1):
                 selected_agent = agents.get(task.route) or agents["general"]
                 await output_queue.put(

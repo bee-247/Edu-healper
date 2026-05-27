@@ -1,6 +1,6 @@
 # Edu-Helper
 
-SuperMew 是一个面向教师场景的多 Agent 教育 RAG 知识库问答与教学辅助系统。系统围绕教材资料入库、知识检索、教学内容生成和批改参考展开，结合 LangChain Agents、Milvus、Neo4j、PostgreSQL、Redis 与 OCR/视觉识别能力，提供教材问答、智能出题、教案生成、知识路径推理、主观题批改参考和客观题规则判分等功能。
+Edu-Helper 是一个面向教师场景的多 Agent 教育 RAG 知识库问答与教学辅助系统。系统围绕教材资料入库、知识检索、教学内容生成和批改参考展开，结合 LangChain Agents、Milvus、Neo4j、PostgreSQL、Redis 与 OCR/视觉识别能力，提供教材问答、智能出题、教案生成、知识路径推理、主观题批改参考和客观题规则判分等功能。
 
 ## 核心能力
 

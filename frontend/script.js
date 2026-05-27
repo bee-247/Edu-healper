@@ -312,6 +312,17 @@ createApp({
                                         this.messages[botMsgIdx].isThinking = false;
                                     }
                                     this.messages[botMsgIdx].text += data.content;
+                                } else if (data.type === 'agent_route') {
+                                    this.messages[botMsgIdx].agentRoute = data.agent_route;
+                                } else if (data.type === 'task_start') {
+                                    if (!this.messages[botMsgIdx].ragSteps) {
+                                        this.messages[botMsgIdx].ragSteps = [];
+                                    }
+                                    this.messages[botMsgIdx].ragSteps.push({
+                                        icon: '▶',
+                                        label: `任务 ${data.task_index}/${data.task_total}：${data.agent_route}`,
+                                        detail: data.instruction
+                                    });
                                 } else if (data.type === 'trace') {
                                     this.messages[botMsgIdx].ragTrace = data.rag_trace;
                                 } else if (data.type === 'token_usage') {

@@ -6,7 +6,7 @@ from langchain.chat_models import init_chat_model
 from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, SystemMessage
 from education.agents.registry import get_teacher_agent_specs
-from education.agents.router import route_teacher_agent
+from education.agents.router import TeacherSubTask, plan_teacher_tasks, route_teacher_agent
 from education.tool_context import reset_teacher_username, set_teacher_username
 from tools import (
     get_last_rag_context,
@@ -249,6 +249,60 @@ def _select_agent(user_text: str):
     route = route_teacher_agent(user_text)
     return agents.get(route) or agents["general"], route
 
+
+def _plan_agent_tasks(user_text: str) -> list[TeacherSubTask]:
+    tasks = plan_teacher_tasks(user_text)
+    if not tasks:
+        _, route = _select_agent(user_text)
+        return [TeacherSubTask(route=route, instruction=user_text)]
+    return tasks
+
+
+def _extract_response_content(result) -> str:
+    if isinstance(result, dict):
+        if "output" in result:
+            return result["output"]
+        if "messages" in result and result["messages"]:
+            msg = result["messages"][-1]
+            return getattr(msg, "content", str(msg))
+        return str(result)
+    if hasattr(result, "content"):
+        return result.content
+    return str(result)
+
+
+def _record_result_token_usage(user_id: str, session_id: str, result) -> None:
+    if isinstance(result, dict) and isinstance(result.get("messages"), list):
+        record_token_usage_from_messages(user_id, session_id, result["messages"])
+    else:
+        record_token_usage_from_message(user_id, session_id, result)
+
+
+def _task_messages(base_messages: list, original_text: str, task: TeacherSubTask, previous_outputs: list[str]) -> list:
+    task_prompt = f"""
+用户原始请求：
+{original_text}
+
+当前子任务（由任务规划器拆分）：
+{task.instruction}
+""".strip()
+    if previous_outputs:
+        task_prompt += "\n\n前序子任务结果摘要，可作为当前任务依据：\n" + "\n\n".join(previous_outputs)
+    return base_messages[:-1] + [HumanMessage(content=task_prompt)]
+
+
+def _format_multi_task_response(parts: list[tuple[TeacherSubTask, str]]) -> str:
+    if len(parts) == 1:
+        return parts[0][1]
+    sections = []
+    for index, (task, content) in enumerate(parts, start=1):
+        sections.append(f"### 任务 {index}：{task.route}\n\n{content}")
+    return "\n\n".join(sections)
+
+
+def _route_summary(tasks: list[TeacherSubTask]) -> str:
+    return " -> ".join(task.route for task in tasks)
+
 storage = ConversationStorage()
 
 def summarize_old_messages(model, messages: list) -> str:
@@ -286,35 +340,26 @@ def chat_with_agent(user_text: str, user_id: str = "default_user", session_id: s
 
     messages.append(HumanMessage(content=user_text))
     usage_token = set_active_token_usage_session(user_id, session_id)
-    selected_agent, agent_route = _select_agent(user_text)
+    task_plan = _plan_agent_tasks(user_text)
     context_token = set_teacher_username(user_id)
+    task_results = []
+    previous_outputs = []
     try:
-        result = selected_agent.invoke(
-            {"messages": messages},
-            config={"recursion_limit": 8},
-        )
+        for task in task_plan:
+            selected_agent = agents.get(task.route) or agents["general"]
+            result = selected_agent.invoke(
+                {"messages": _task_messages(messages, user_text, task, previous_outputs)},
+                config={"recursion_limit": 8},
+            )
+            response_part = _extract_response_content(result)
+            _record_result_token_usage(user_id, session_id, result)
+            task_results.append((task, response_part))
+            previous_outputs.append(response_part)
     finally:
         reset_teacher_username(context_token)
         reset_active_token_usage_session(usage_token)
 
-    response_content = ""
-    if isinstance(result, dict):
-        if "output" in result:
-            response_content = result["output"]
-        elif "messages" in result and result["messages"]:
-            msg = result["messages"][-1]
-            response_content = getattr(msg, "content", str(msg))
-        else:
-            response_content = str(result)
-    elif hasattr(result, "content"):
-        response_content = result.content
-    else:
-        response_content = str(result)
-
-    if isinstance(result, dict) and isinstance(result.get("messages"), list):
-        record_token_usage_from_messages(user_id, session_id, result["messages"])
-    else:
-        record_token_usage_from_message(user_id, session_id, result)
+    response_content = _format_multi_task_response(task_results)
     
     messages.append(AIMessage(content=response_content))
 
@@ -327,7 +372,7 @@ def chat_with_agent(user_text: str, user_id: str = "default_user", session_id: s
     return {
         "response": response_content,
         "rag_trace": rag_trace,
-        "agent_route": agent_route,
+        "agent_route": _route_summary(task_plan),
     }
 
 
@@ -361,7 +406,7 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
 
     messages.append(HumanMessage(content=user_text))
     usage_token = set_active_token_usage_session(user_id, session_id)
-    selected_agent, agent_route = _select_agent(user_text)
+    task_plan = _plan_agent_tasks(user_text)
 
     full_response = ""
 
@@ -369,32 +414,57 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
         """后台任务：运行 agent 并将内容 chunk 推入输出队列。"""
         nonlocal full_response
         context_token = set_teacher_username(user_id)
+        previous_outputs = []
         try:
-            await output_queue.put({"type": "agent_route", "agent_route": agent_route})
-            async for msg, metadata in selected_agent.astream(
-                {"messages": messages},
-                stream_mode="messages",
-                config={"recursion_limit": 8},
-            ):
-                record_token_usage_from_message(user_id, session_id, msg)
-                if not isinstance(msg, AIMessageChunk):
-                    continue
-                if getattr(msg, "tool_call_chunks", None):
-                    continue
+            await output_queue.put({"type": "agent_route", "agent_route": _route_summary(task_plan)})
+            for index, task in enumerate(task_plan, start=1):
+                selected_agent = agents.get(task.route) or agents["general"]
+                await output_queue.put(
+                    {
+                        "type": "task_start",
+                        "task_index": index,
+                        "task_total": len(task_plan),
+                        "agent_route": task.route,
+                        "instruction": task.instruction,
+                    }
+                )
+                if len(task_plan) > 1:
+                    heading = f"### 任务 {index}：{task.route}\n\n"
+                    full_response += heading
+                    await output_queue.put({"type": "content", "content": heading})
 
-                content = ""
-                if isinstance(msg.content, str):
-                    content = msg.content
-                elif isinstance(msg.content, list):
-                    for block in msg.content:
-                        if isinstance(block, str):
-                            content += block
-                        elif isinstance(block, dict) and block.get("type") == "text":
-                            content += block.get("text", "")
+                task_output = ""
+                async for msg, metadata in selected_agent.astream(
+                    {"messages": _task_messages(messages, user_text, task, previous_outputs)},
+                    stream_mode="messages",
+                    config={"recursion_limit": 8},
+                ):
+                    record_token_usage_from_message(user_id, session_id, msg)
+                    if not isinstance(msg, AIMessageChunk):
+                        continue
+                    if getattr(msg, "tool_call_chunks", None):
+                        continue
 
-                if content:
-                    full_response += content
-                    await output_queue.put({"type": "content", "content": content})
+                    content = ""
+                    if isinstance(msg.content, str):
+                        content = msg.content
+                    elif isinstance(msg.content, list):
+                        for block in msg.content:
+                            if isinstance(block, str):
+                                content += block
+                            elif isinstance(block, dict) and block.get("type") == "text":
+                                content += block.get("text", "")
+
+                    if content:
+                        task_output += content
+                        full_response += content
+                        await output_queue.put({"type": "content", "content": content})
+
+                previous_outputs.append(task_output)
+                if len(task_plan) > 1 and index < len(task_plan):
+                    separator = "\n\n"
+                    full_response += separator
+                    await output_queue.put({"type": "content", "content": separator})
         except Exception as e:
             await output_queue.put({"type": "error", "content": str(e)})
         finally:

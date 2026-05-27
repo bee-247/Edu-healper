@@ -303,6 +303,14 @@ def _format_multi_task_response(parts: list[tuple[TeacherSubTask, str]]) -> str:
 def _route_summary(tasks: list[TeacherSubTask]) -> str:
     return " -> ".join(task.route for task in tasks)
 
+
+def _log_task_plan(tasks: list[TeacherSubTask]) -> None:
+    summary = [
+        {"index": index, "route": task.route, "instruction": task.instruction}
+        for index, task in enumerate(tasks, start=1)
+    ]
+    print(f"[agent_task_plan] {json.dumps(summary, ensure_ascii=False)}")
+
 storage = ConversationStorage()
 
 def summarize_old_messages(model, messages: list) -> str:
@@ -341,6 +349,7 @@ def chat_with_agent(user_text: str, user_id: str = "default_user", session_id: s
     messages.append(HumanMessage(content=user_text))
     usage_token = set_active_token_usage_session(user_id, session_id)
     task_plan = _plan_agent_tasks(user_text)
+    _log_task_plan(task_plan)
     context_token = set_teacher_username(user_id)
     task_results = []
     previous_outputs = []
@@ -407,6 +416,7 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
     messages.append(HumanMessage(content=user_text))
     usage_token = set_active_token_usage_session(user_id, session_id)
     task_plan = _plan_agent_tasks(user_text)
+    _log_task_plan(task_plan)
 
     full_response = ""
 

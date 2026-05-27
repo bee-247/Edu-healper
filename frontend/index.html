@@ -500,6 +500,19 @@
                             <i class="fas fa-bookmark"></i> 保存
                         </button>
                     </div>
+                    <div v-if="!msg.isUser && msg.taskPlan && msg.taskPlan.length" class="message-meta">
+                        <details class="reasoning-details">
+                            <summary>任务规划</summary>
+                            <div class="reasoning-content">
+                                <div v-if="msg.agentRoute" class="trace-line">
+                                    Agent 路径：{{ msg.agentRoute }}
+                                </div>
+                                <div v-for="task in msg.taskPlan" :key="task.index" class="trace-line">
+                                    任务 {{ task.index }}/{{ msg.taskPlan.length }}：{{ task.route }} - {{ task.instruction }}
+                                </div>
+                            </div>
+                        </details>
+                    </div>
                     <div v-if="!msg.isUser && msg.ragTrace" class="message-meta">
                         <details class="reasoning-details">
                             <summary>检索过程</summary>

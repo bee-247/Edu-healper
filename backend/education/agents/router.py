@@ -122,6 +122,10 @@ def plan_teacher_tasks(user_text: str) -> list[TeacherSubTask]:
   应拆为两个任务：
   1. general：讲解并梳理全等三角形核心内容、重点和易错点。
   2. question_generator：围绕全等三角形生成若干题目，附答案和解析。
+- “请先介绍全等三角形的核心知识点，再围绕这个知识点出 3 道题，并附答案解析”
+  应拆为两个任务：
+  1. general：先介绍全等三角形的核心知识点。
+  2. question_generator：再围绕前序知识点生成 3 道题，并附答案解析。
 - “围绕全等三角形出 5 道题，顺便覆盖易错点”
   通常是一个 question_generator 任务，因为“覆盖易错点”是出题约束，不是独立讲解任务。
 - “帮我设计一节课，再配套课堂练习”

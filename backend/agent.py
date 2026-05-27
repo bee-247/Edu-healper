@@ -304,12 +304,15 @@ def _route_summary(tasks: list[TeacherSubTask]) -> str:
     return " -> ".join(task.route for task in tasks)
 
 
-def _log_task_plan(tasks: list[TeacherSubTask]) -> None:
-    summary = [
+def _task_plan_payload(tasks: list[TeacherSubTask]) -> list[dict]:
+    return [
         {"index": index, "route": task.route, "instruction": task.instruction}
         for index, task in enumerate(tasks, start=1)
     ]
-    print(f"[agent_task_plan] {json.dumps(summary, ensure_ascii=False)}")
+
+
+def _log_task_plan(tasks: list[TeacherSubTask]) -> None:
+    print(f"[agent_task_plan] {json.dumps(_task_plan_payload(tasks), ensure_ascii=False)}")
 
 storage = ConversationStorage()
 
@@ -426,6 +429,7 @@ async def chat_with_agent_stream(user_text: str, user_id: str = "default_user", 
         context_token = set_teacher_username(user_id)
         previous_outputs = []
         try:
+            await output_queue.put({"type": "task_plan", "tasks": _task_plan_payload(task_plan)})
             await output_queue.put({"type": "agent_route", "agent_route": _route_summary(task_plan)})
             for index, task in enumerate(task_plan, start=1):
                 selected_agent = agents.get(task.route) or agents["general"]

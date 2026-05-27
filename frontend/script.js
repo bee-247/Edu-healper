@@ -312,6 +312,8 @@ createApp({
                                         this.messages[botMsgIdx].isThinking = false;
                                     }
                                     this.messages[botMsgIdx].text += data.content;
+                                } else if (data.type === 'task_plan') {
+                                    this.messages[botMsgIdx].taskPlan = data.tasks || [];
                                 } else if (data.type === 'agent_route') {
                                     this.messages[botMsgIdx].agentRoute = data.agent_route;
                                 } else if (data.type === 'task_start') {
